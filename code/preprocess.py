@@ -6,10 +6,10 @@ from scipy import sparse
 from tqdm import tqdm
 import os
 
-data_dir = Path('..//input/')
-if not os.path.exists("./data"):
-    os.mkdir("./data")
-
+data_dir = str(Path.cwd()) + '/data/'
+# if not os.path.exists("./data"):
+#     os.mkdir("./data")
+print(data_dir)
 def read_notebook(path):
     return (
         pd.read_json(
@@ -20,7 +20,7 @@ def read_notebook(path):
     )
 
 
-paths_train = list((data_dir / 'train').glob('*.json'))
+paths_train = list(Path(data_dir + 'train').glob('*.json'))
 notebooks_train = [
     read_notebook(path) for path in tqdm(paths_train, desc='Train NBs')
 ]
@@ -32,7 +32,7 @@ df = (
 )
 
 df_orders = pd.read_csv(
-    data_dir / 'train_orders.csv',
+    data_dir + 'train_orders.csv',
     index_col='id',
     squeeze=True,
 ).str.split()  # Split the string representation of cell_ids into a list
@@ -58,7 +58,7 @@ df_ranks = (
         .set_index('cell_id', append=True)
 )
 
-df_ancestors = pd.read_csv(data_dir / 'train_ancestors.csv', index_col='id')
+df_ancestors = pd.read_csv(data_dir + 'train_ancestors.csv', index_col='id')
 df = df.reset_index().merge(df_ranks, on=["id", "cell_id"]).merge(df_ancestors, on=["id"])
 df["pct_rank"] = df["rank"] / df.groupby("id")["cell_id"].transform("count")
 
