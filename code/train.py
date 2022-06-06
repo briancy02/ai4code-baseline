@@ -4,6 +4,7 @@ from dataset import *
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader, Dataset
+from torch import nn
 from model import *
 from tqdm import tqdm
 import sys, os
@@ -131,11 +132,15 @@ def train(model, train_loader, val_loader, epochs):
         val_df.loc[val_df["cell_type"] == "markdown", "pred"] = y_pred
         y_dummy = val_df.sort_values("pred").groupby('id')['cell_id'].apply(list)
         print("Preds score", kendall_tau(df_orders.loc[y_dummy.index], y_dummy))
-        torch.save(model.state_dict(), "./outputs/model.bin")
+        torch.save(model.state_dict(), "./outputs/model-{}.bin".format(e))
 
     return model, y_pred
 
 
 model = MarkdownModel(args.model_name_or_path)
-model = model.cuda()
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if torch.cuda.device_count() > 1:
+    model = nn.DataParallel(model, device_ids=[0,1,2,3])
+model = model.to(device)
 model, y_pred = train(model, train_loader, val_loader, epochs=args.epochs)
