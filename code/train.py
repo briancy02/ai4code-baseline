@@ -21,7 +21,9 @@ parser.add_argument('--train_features_path', type=str, default=data_dir+ 'train_
 parser.add_argument('--val_mark_path', type=str, default=data_dir+ 'val_mark.csv')
 parser.add_argument('--val_features_path', type=str, default=data_dir+ 'val_fts.json')
 parser.add_argument('--val_path', type=str, default=data_dir+ 'val.csv')
+parser.add_argument('--checkpoint_format', type=str, default="./outputs/model-{e}.bin")
 
+parser.add_argument('--num_gpus', type=int, default=4)
 parser.add_argument('--md_max_len', type=int, default=64)
 parser.add_argument('--total_max_len', type=int, default=512)
 parser.add_argument('--batch_size', type=int, default=8)
@@ -98,8 +100,18 @@ def train(model, train_loader, val_loader, epochs):
 
     criterion = torch.nn.L1Loss()
     scaler = torch.cuda.amp.GradScaler()
-
-    for e in range(epochs):
+    
+    resume_from_epoch = 0
+    for try_epoch in range(epochs, 0, -1):
+        if os.path.exists('./outputs/model-{epoch}.bin'.format(epoch=try_epoch)):
+            resume_from_epoch = try_epoch
+            break
+    if resume_from_epoch:
+        filepath = args.checkpoint_format.format(e=resume_from_epoch)
+        checkpoint = torch.load(args.checkpoint_format.format(e=try_epoch))
+        model.load_state_dict(checkpoint)
+        
+    for e in range(resume_from_epoch, epochs):
         model.train()
         tbar = tqdm(train_loader, file=sys.stdout)
         loss_list = []
@@ -132,7 +144,7 @@ def train(model, train_loader, val_loader, epochs):
         val_df.loc[val_df["cell_type"] == "markdown", "pred"] = y_pred
         y_dummy = val_df.sort_values("pred").groupby('id')['cell_id'].apply(list)
         print("Preds score", kendall_tau(df_orders.loc[y_dummy.index], y_dummy))
-        torch.save(model.state_dict(), "./outputs/model-{}.bin".format(e))
+        torch.save(model.state_dict(), args.checkpoint_format.format(e))
 
     return model, y_pred
 
@@ -141,6 +153,6 @@ model = MarkdownModel(args.model_name_or_path)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.device_count() > 1:
-    model = nn.DataParallel(model, device_ids=[0,1,2,3])
+    model = nn.DataParallel(model, device_ids=[i for i in range(args.num_gpus)])
 model = model.to(device)
 model, y_pred = train(model, train_loader, val_loader, epochs=args.epochs)
