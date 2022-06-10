@@ -60,6 +60,7 @@ df_ranks = (
 
 df_ancestors = pd.read_csv(data_dir + 'train_ancestors.csv', index_col='id')
 df = df.reset_index().merge(df_ranks, on=["id", "cell_id"]).merge(df_ancestors, on=["id"])
+# count number of cells in notebook?
 df["pct_rank"] = df["rank"] / df.groupby("id")["cell_id"].transform("count")
 
 from sklearn.model_selection import GroupShuffleSplit

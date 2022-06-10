@@ -47,6 +47,7 @@ df_orders = pd.read_csv(
     squeeze=True,
 ).str.split()
 
+# takes in df 
 train_ds = MarkdownDataset(train_df_mark, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
                            total_max_len=args.total_max_len, fts=train_fts)
 val_ds = MarkdownDataset(val_df_mark, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
@@ -74,6 +75,7 @@ def validate(model, val_loader):
             inputs, target = read_data(data)
 
             with torch.cuda.amp.autocast():
+                # inputs dim is 4
                 pred = model(*inputs)
 
             preds.append(pred.detach().cpu().numpy().ravel())
@@ -144,7 +146,7 @@ def train(model, train_loader, val_loader, epochs):
         val_df.loc[val_df["cell_type"] == "markdown", "pred"] = y_pred
         y_dummy = val_df.sort_values("pred").groupby('id')['cell_id'].apply(list)
         print("Preds score", kendall_tau(df_orders.loc[y_dummy.index], y_dummy))
-        torch.save(model.state_dict(), args.checkpoint_format.format(e))
+        torch.save(model.state_dict(), args.checkpoint_format.format(e=e))
 
     return model, y_pred
 
