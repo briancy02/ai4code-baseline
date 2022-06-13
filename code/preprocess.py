@@ -91,6 +91,7 @@ def sample_cells(cells, n):
         return [cell[:200] for cell in cells]
     else:
         results = []
+        # select cells sparsely based on the n value
         step = len(cells) / n
         idx = 0
         while int(np.round(idx)) < len(cells):

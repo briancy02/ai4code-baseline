@@ -1,6 +1,8 @@
 from torch.utils.data import DataLoader, Dataset
 import torch
 from transformers import AutoTokenizer
+from easynmt import EasyNMT
+model = EasyNMT('opus-mt')
 
 class MarkdownDataset(Dataset):
     # train mark is taken as input - train mark contains markdown cells
@@ -11,14 +13,16 @@ class MarkdownDataset(Dataset):
         self.total_max_len = total_max_len  # maxlen allowed by model config
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.fts = fts
+        self.model = EasyNMT('opus-mt')
 
     def __getitem__(self, index):
         row = self.df.iloc[index]
         print("row source", row.source)
         print("code", [str(x) for x in self.fts[row.id]["codes"]])
+        text = model.translate(row.source, target_lang='en')
 
         inputs = self.tokenizer.encode_plus(
-            row.source,
+            text,
             None,
             add_special_tokens=True,
             # 64
@@ -54,6 +58,8 @@ class MarkdownDataset(Dataset):
         for x in code_inputs['input_ids']:
             print(x)
             ids.extend(x[:-1])
+        
+        print("ids", ids)
         ids = ids[:self.total_max_len]
         if len(ids) != self.total_max_len:
             ids = ids + [self.tokenizer.pad_token_id, ] * (self.total_max_len - len(ids))

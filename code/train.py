@@ -59,6 +59,7 @@ val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_w
 
 
 def read_data(data):
+    # seperation of training data and label
     return tuple(d.cuda() for d in data[:-1]), data[-1].cuda()
 
 
@@ -83,6 +84,7 @@ def validate(model, val_loader):
 
     return np.concatenate(labels), np.concatenate(preds)
 
+# Model takes one markdown cell and sampled code as a single datapoint, learns to generate correct percent rank
 
 def train(model, train_loader, val_loader, epochs):
     np.random.seed(0)
@@ -140,8 +142,10 @@ def train(model, train_loader, val_loader, epochs):
             avg_loss = np.round(np.mean(loss_list), 4)
 
             tbar.set_description(f"Epoch {e + 1} Loss: {avg_loss} lr: {scheduler.get_last_lr()}")
-
+        
+        # objective is to learn the percentage ranking
         y_val, y_pred = validate(model, val_loader)
+        # display rankings in percentage
         val_df["pred"] = val_df.groupby(["id", "cell_type"])["rank"].rank(pct=True)
         val_df.loc[val_df["cell_type"] == "markdown", "pred"] = y_pred
         y_dummy = val_df.sort_values("pred").groupby('id')['cell_id'].apply(list)
