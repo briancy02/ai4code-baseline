@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 from dataset import *
+from pathlib import Path
+from datasets import load_dataset
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader, Dataset
@@ -47,10 +49,18 @@ df_orders = pd.read_csv(
     squeeze=True,
 ).str.split()
 
+raw_datasets = load_dataset("code_search_net", "python")
+def get_training_corpus():
+    return (
+        raw_datasets["train"][i : i + 1000]["whole_func_string"]
+        for i in range(0, len(raw_datasets["train"]), 1000)
+    )
+
 # takes in df 
-train_ds = MarkdownDataset(train_df_mark, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
+training_corpus = get_training_corpus()
+train_ds = MarkdownDataset(train_df_mark, training_corpus, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
                            total_max_len=args.total_max_len, fts=train_fts)
-val_ds = MarkdownDataset(val_df_mark, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
+val_ds = MarkdownDataset(val_df_mark, training_corpus, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
                          total_max_len=args.total_max_len, fts=val_fts)
 train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers,
                           pin_memory=False, drop_last=True)

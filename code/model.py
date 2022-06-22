@@ -11,13 +11,14 @@ class MarkdownModel(nn.Module):
         self.top = nn.Linear(769, 1)
 
     def forward(self, ids, mask, fts):
-        print(self.model(ids, mask))
+        #print(self.model(ids, mask))
         x = self.model(ids, mask)[0]
-        print("/n")
-        print("x", x.size())
-        print(x[:, 0, :].size())   
-        print("fts", fts)
+        #print("/n")
+       # print("x", x.size())
+        #print(x[:, 0, :].size())   
+        #print("fts", fts)
         x = torch.cat((x[:, 0, :], fts), 1)
-        print("/n", x.size())
+        #print("/n", x.size())
         x = self.top(x)
         return x
+        
