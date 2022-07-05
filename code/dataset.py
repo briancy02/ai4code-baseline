@@ -1,9 +1,9 @@
 from torch.utils.data import DataLoader, Dataset
 import torch
 from transformers import AutoTokenizer
-from easynmt import EasyNMT
+#from easynmt import EasyNMT
 from tqdm import tqdm
-model = EasyNMT('opus-mt')
+#model = EasyNMT('opus-mt')
 class MarkdownDataset(Dataset):
     # train mark is taken as input - train mark contains markdown cells
     def __init__(self, df, training_corpus, model_name_or_path, total_max_len, md_max_len, fts):
@@ -12,8 +12,8 @@ class MarkdownDataset(Dataset):
         self.md_max_len = md_max_len
         self.total_max_len = total_max_len  # maxlen allowed by model config
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-        old_tokenizer = AutoTokenizer.from_pretrained("gpt2")
-        self.tokenizer = old_tokenizer.train_new_from_iterator(training_corpus, 52000)
+        #old_tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+        #self.tokenizer = old_tokenizer.train_new_from_iterator(training_corpus, 50265)
         self.fts = fts
         
 
@@ -33,20 +33,22 @@ class MarkdownDataset(Dataset):
             return_token_type_ids=True,
             truncation=True
         )
+        n_md = self.fts[row.id]["total_md"]
+        n_code = self.fts[row.id]["total_code"]
+        
         code_inputs = self.tokenizer.batch_encode_plus(
             [str(x) for x in self.fts[row.id]["codes"]],
             # Whether or not to encode the sequences with the special tokens relative to their model.
             add_special_tokens=True,
             # Truncate to a maximum length specified with the argument max_length or to the maximum acceptable input length for the model if that argument is not provided. This will truncate token by token, removing a token from the longest sequence in the pair if a pair of sequences (or a batch of pairs) is provided.
-            max_length=23,
+            max_length=100,
             padding="max_length",
             truncation=True
         )
         #features[idx]["total_code"] = total_code
         #features[idx]["total_md"] = total_md
         #features[idx]["codes"] = codes
-        n_md = self.fts[row.id]["total_md"]
-        n_code = self.fts[row.id]["total_code"]
+        
         if n_md + n_code == 0:
             fts = torch.FloatTensor([0])
         else:

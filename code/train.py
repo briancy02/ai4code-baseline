@@ -116,10 +116,13 @@ def train(model, train_loader, val_loader, epochs):
     scaler = torch.cuda.amp.GradScaler()
     
     resume_from_epoch = 0
+    print()
     for try_epoch in range(epochs, 0, -1):
+        print(try_epoch)
         if os.path.exists('./outputs/model-{epoch}.bin'.format(epoch=try_epoch)):
-            resume_from_epoch = try_epoch
+            resume_from_epoch = try_epoch+1
             break
+    print(resume_from_epoch)
     if resume_from_epoch:
         filepath = args.checkpoint_format.format(e=resume_from_epoch)
         checkpoint = torch.load(args.checkpoint_format.format(e=try_epoch))
@@ -131,7 +134,6 @@ def train(model, train_loader, val_loader, epochs):
         loss_list = []
         preds = []
         labels = []
-
         for idx, data in enumerate(tbar):
             inputs, target = read_data(data)
 
@@ -165,7 +167,7 @@ def train(model, train_loader, val_loader, epochs):
     return model, y_pred
 
 
-model = MarkdownModel(args.model_name_or_path)
+model = MarkdownModel(args.model_name_or_path, args.md_max_len)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.device_count() > 1:
