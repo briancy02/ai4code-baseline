@@ -11,9 +11,7 @@ class MarkdownDataset(Dataset):
         self.df = df.reset_index(drop=True)
         self.md_max_len = md_max_len
         self.total_max_len = total_max_len  # maxlen allowed by model config
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, model_max_length=total_max_len)
-        self.tokenizer.model_max_length = self.total_max_len
-        self.tokenizer.init_kwargs['model_max_length'] = self.total_max_len
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         #old_tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         #self.tokenizer = old_tokenizer.train_new_from_iterator(training_corpus, 50265)
         self.fts = fts
@@ -25,7 +23,6 @@ class MarkdownDataset(Dataset):
         #print("code", [str(x) for x in self.fts[row.id]["codes"]])
         #text = model.translate(row.source, target_lang='en')
 
-        
         inputs = self.tokenizer.encode_plus(
             row.source,
             None,
