@@ -111,7 +111,7 @@ def get_features(df):
         total_md = sub_df[sub_df.cell_type == "markdown"].shape[0]
         code_sub_df = sub_df[sub_df.cell_type == "code"]
         total_code = code_sub_df.shape[0]
-        codes = sample_cells(code_sub_df.source.values, 40)
+        codes = sample_cells(code_sub_df.source.values, 20)
         features[idx]["total_code"] = total_code
         features[idx]["total_md"] = total_md
         features[idx]["codes"] = codes

@@ -13,7 +13,7 @@ import sys, os
 from metrics import *
 import torch
 import argparse
-
+from stlr import SlantedTriangular
 data_dir = str(Path.cwd()) + '/data/'
 
 parser = argparse.ArgumentParser(description='Process some arguments')
@@ -35,6 +35,8 @@ parser.add_argument('--n_workers', type=int, default=8)
 
 args = parser.parse_args()
 #os.mkdir("./outputs")
+
+print("MODEL CONFIGS")
 
 train_df_mark = pd.read_csv(args.train_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
 train_fts = json.load(open(args.train_features_path))
@@ -60,12 +62,31 @@ def get_training_corpus():
 training_corpus = get_training_corpus()
 train_ds = MarkdownDataset(train_df_mark, training_corpus, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
                            total_max_len=args.total_max_len, fts=train_fts)
+def collate_fn_padd(batch):
+    '''
+    Padds batch of variable length
+
+    note: it converts things ToTensor manually here since the ToTensor transform
+    assume it takes in images rather than arbitrary tensors.
+    '''
+    inputs = torch.nn.utils.rnn.pad_sequence([ t[0] for t in batch], batch_first=True)
+    masks = torch.nn.utils.rnn.pad_sequence([ t[1] for t in batch], batch_first=True)
+    fts = torch.nn.utils.rnn.pad_sequence([ t[2] for t in batch], batch_first=True)
+    ranks = torch.nn.utils.rnn.pad_sequence([ t[3] for t in batch], batch_first=True)
+    #print(torch.swapaxes(inputs, 0, 1).size())
+    #print(inputs.size())
+    #print(inputs.max())
+    #inputs = torch.empty(batch_size, total_max_len)
+    #masks = torch.empty(batch_size, total_max_len)
+    
+    return inputs, masks, fts, ranks
+
 val_ds = MarkdownDataset(val_df_mark, training_corpus, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
                          total_max_len=args.total_max_len, fts=val_fts)
 train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers,
-                          pin_memory=False, drop_last=True)
+                          pin_memory=False, drop_last=True, collate_fn = collate_fn_padd)
 val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.n_workers,
-                        pin_memory=False, drop_last=False)
+                        pin_memory=False, drop_last=False,collate_fn = collate_fn_padd)
 
 
 def read_data(data):
@@ -109,6 +130,7 @@ def train(model, train_loader, val_loader, epochs):
     num_train_optimization_steps = int(args.epochs * len(train_loader) / args.accumulation_steps)
     optimizer = AdamW(optimizer_grouped_parameters, lr=3e-5,
                       correct_bias=False)  # To reproduce BertAdam specific behavior set correct_bias=False
+    #scheduler = SlantedTriangular(optimizer,epochs,num_steps_per_epoch=num_train_optimization_steps)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0.05 * num_train_optimization_steps,
                                                 num_training_steps=num_train_optimization_steps)  # PyTorch scheduler
 
@@ -116,13 +138,10 @@ def train(model, train_loader, val_loader, epochs):
     scaler = torch.cuda.amp.GradScaler()
     
     resume_from_epoch = 0
-    print()
     for try_epoch in range(epochs, 0, -1):
-        print(try_epoch)
         if os.path.exists('./outputs/model-{epoch}.bin'.format(epoch=try_epoch)):
             resume_from_epoch = try_epoch+1
             break
-    print(resume_from_epoch)
     if resume_from_epoch:
         filepath = args.checkpoint_format.format(e=resume_from_epoch)
         checkpoint = torch.load(args.checkpoint_format.format(e=try_epoch))
@@ -134,6 +153,7 @@ def train(model, train_loader, val_loader, epochs):
         loss_list = []
         preds = []
         labels = []
+
         for idx, data in enumerate(tbar):
             inputs, target = read_data(data)
 
@@ -153,7 +173,7 @@ def train(model, train_loader, val_loader, epochs):
 
             avg_loss = np.round(np.mean(loss_list), 4)
 
-            tbar.set_description(f"Epoch {e + 1} Loss: {avg_loss} lr: {scheduler.get_last_lr()}")
+            tbar.set_description(f"Epoch {e + 1} Loss: {avg_loss} lr: {optimizer.param_groups[0]['lr']}")
         
         # objective is to learn the percentage ranking
         y_val, y_pred = validate(model, val_loader)

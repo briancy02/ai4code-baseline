@@ -35,19 +35,21 @@ class MarkdownDataset(Dataset):
         )
         n_md = self.fts[row.id]["total_md"]
         n_code = self.fts[row.id]["total_code"]
-        
+        #print(n_md, n_code)
+        #print("one code cell", len(self.fts[row.id]["codes"][0]))
         code_inputs = self.tokenizer.batch_encode_plus(
             [str(x) for x in self.fts[row.id]["codes"]],
             # Whether or not to encode the sequences with the special tokens relative to their model.
             add_special_tokens=True,
             # Truncate to a maximum length specified with the argument max_length or to the maximum acceptable input length for the model if that argument is not provided. This will truncate token by token, removing a token from the longest sequence in the pair if a pair of sequences (or a batch of pairs) is provided.
-            max_length=100,
+            max_length=19,
             padding="max_length",
             truncation=True
         )
-        #features[idx]["total_code"] = total_code
-        #features[idx]["total_md"] = total_md
-        #features[idx]["codes"] = codes
+        #print(len(code_inputs))
+#         features[idx]["total_code"] = total_code
+#         features[idx]["total_md"] = total_md
+#         features[idx]["codes"] = codes
         
         if n_md + n_code == 0:
             fts = torch.FloatTensor([0])
