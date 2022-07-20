@@ -12,80 +12,56 @@ class MarkdownModel(nn.Module):
         super(MarkdownModel, self).__init__()
         self.attention_window = 512
         self.md_max_len = md_max_len
-        self.max_input_len = 512
-        self.max_input_len += 2
-        # lengthen model
+        self.max_input_len = 1024
+        
         self.model = AutoModel.from_pretrained(model_path)
-        config = LongformerConfig(vocab_size = self.model.config.vocab_size, max_position_embeddings = self.model.config.max_position_embeddings)
-        #config.attention_mode = 'sliding_chunks'
-        longformer_model = LongformerModel(config=config)
-        print(config)
-        print(self.model.config)
-        print("embeddings", self.model.embeddings)
-        print(longformer_model.embeddings)
-        current_max_input_len, embed_size = self.model.embeddings.position_embeddings.weight.shape
-#         print(current_max_input_len, embed_size)
-        new_encoder_pos_embed = self.model.embeddings.position_embeddings.weight.new_empty(self.max_input_len, embed_size)
-        print("new embed size", new_encoder_pos_embed.size())
+        #print(self.model.encoder)
+        config = self.model.config
+        current_max_pos, embed_size = self.model.embeddings.position_embeddings.weight.shape
+        self.max_input_len += 2  # NOTE: RoBERTa has positions 0,1 reserved, so embedding size is max position + 2
+        config.max_position_embeddings = self.max_input_len
+        print(self.max_input_len, current_max_pos)
+        assert self.max_input_len >= current_max_pos
+        new_pos_embed = self.model.embeddings.position_embeddings.weight.new_empty(self.max_input_len, embed_size)
         k = 2
-        step = current_max_input_len - 2
+        step = current_max_pos - 2
         while k < self.max_input_len - 1:
-            new_encoder_pos_embed[k:(k+step)] = self.model.embeddings.position_embeddings.weight[2:]
+            print(step, k)
+            new_pos_embed[k:(k + step)] = self.model.embeddings.position_embeddings.weight[2:]
             k += step
-        longformer_model.embeddings.position_embeddings.weight.data = new_encoder_pos_embed
-        print(longformer_model.embeddings.position_embeddings.weight.data.size)
-        print(longformer_model.embeddings.position_embeddings.weight.shape)
-        
-        #Attention set up
-        longformer_model.config.vocab_size = self.model.config.vocab_size
-        longformer_model.config.layer_norm_eps = self.model.config.layer_norm_eps
-        longformer_model.config.attention_window = [self.attention_window] * self.model.config.num_hidden_layers
-#         longformer_model.config.attention_window[:4] = [32,32,64,64]
-#         longformer_model.config.attention_window[4:6] = [128, 128]
-#         longformer_model.config.attention_window[6:8] = [256,256]
-#         longformer_model.config.attention_window[8:10] = [512, 512]
-        #print(self.model.config.num_hidden_layers)
-        #print(self.model.config.attention_window)
-        
+        self.model.embeddings.position_embeddings.weight.data = new_pos_embed
+        self.max_input_len, embed_size)print(self.model.embeddings.weight)
+        print(self.model.embeddings)
+        self.model.embeddings.position_ids.data = torch.tensor([i for i in range(self.max_input_len)]).reshape(1, self.max_input_len)
+
+        # replace the `modeling_bert.BertSelfAttention` object with `LongformerSelfAttention`
+        config.attention_window = [self.attention_window] * self.model.config.num_hidden_layers
         for i, layer in enumerate(self.model.encoder.layer):
-            print(i)
-            longformer_self_attn_for_codebert = LongformerSelfAttention(longformer_model.config, layer_id=i)
-            longformer_self_attn_for_codebert.query = layer.attention.self.query
-            longformer_self_attn_for_codebert.key = layer.attention.self.key
-            longformer_self_attn_for_codebert.value = layer.attention.self.value
-            
-            longformer_self_attn_for_codebert.query_global = copy.deepcopy(layer.attention.self.query)
-            longformer_self_attn_for_codebert.key_global = copy.deepcopy(layer.attention.self.key)
-            longformer_self_attn_for_codebert.value_global = copy.deepcopy(layer.attention.self.value)
-            
-            longformer_model.encoder.layer[i].attention.self = longformer_self_attn_for_codebert
-            
-            #     (output): LongformerSelfOutput(
-      (dense): Linear(in_features=768, out_features=768, bias=True)
-      (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-      (dropout): Dropout(p=0.1, inplace=False)
-    )
-  )
-  (intermediate): LongformerIntermediate(
-    (dense): Linear(in_features=768, out_features=3072, bias=True)
-    (intermediate_act_fn): GELUActivation()
-  )
-  (output): LongformerOutput(
-    (dense): Linear(in_features=3072, out_features=768, bias=True)
-    (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
-    (dropout): Dropout(p=0.1, inplace=False)
-  )
-            print(longformer_model.encoder.layer[i])
-        self.model = longformer_model
-        print(self.model.config)
-        print(self.model)
+            longformer_self_attn = LongformerSelfAttention(config, layer_id=i)
+            #print(longformer_self_attn.query)
+            longformer_self_attn.query = layer.attention.self.query            
+            longformer_self_attn.key = layer.attention.self.key
+            longformer_self_attn.value = layer.attention.self.value
+
+            longformer_self_attn.query_global = copy.deepcopy(layer.attention.self.query)
+            longformer_self_attn.key_global = copy.deepcopy(layer.attention.self.key)
+            longformer_self_attn.value_global = copy.deepcopy(layer.attention.self.value)
+
+            layer.attention.self = longformer_self_attn
+        print(config)
+        print(self.model.embeddings.token_type_ids)
+        
+        print("embeddings", self.model.embeddings)
+        #print(self.model.encoder)
         self.top = nn.Linear(769, 1)
 
     def forward(self, ids, mask, fts):
-        global_attention_mask = torch.zeros_like(ids)
+        #global_attention_mask = torch.zeros_like(ids)
         #print("ids", ids.size())
-        global_attention_mask[:, :] = 1
-        x = self.model(input_ids=ids, attention_mask=mask, global_attention_mask=global_attention_mask)[0]
+        #global_attention_mask[:, :] = 1
+        print(ids.size())
+        print(mask.size())
+        x = self.model(input_ids=ids, attention_mask=mask)[0]
         #print("fts", fts)
         #print("x size", x.size())
         #print("values", torch.mean(x[:, 0:64, :]), fts)
