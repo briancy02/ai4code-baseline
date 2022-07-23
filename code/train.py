@@ -187,7 +187,7 @@ def train(model, train_loader, val_loader, epochs):
     return model, y_pred
 
 
-model = MarkdownModel(args.model_name_or_path, args.md_max_len)
+model = MarkdownModel(args.model_name_or_path, args.md_max_len, using_pretrained=False, num_gpus=args.num_gpus)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.device_count() > 1:

@@ -4,15 +4,16 @@ import torch
 import copy
 from transformers import AutoModel, AutoTokenizer, AdamW, get_linear_schedule_with_warmup
 from transformers.models.longformer.modeling_longformer import LongformerSelfAttention
-from transformers import LongformerModel, LongformerTokenizer, LongformerConfig
-
+from transformers import LongformerModel, LongformerTokenizer, LongformerConfig, LongformerForMaskedLM
+from pathlib import Path
+from pretrain_model import PretrainingModel
 
 class MarkdownModel(nn.Module):
-    def __init__(self, model_path, md_max_len):
+    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus=4):
         super(MarkdownModel, self).__init__()
         self.attention_window = 512
         self.md_max_len = md_max_len
-        self.max_input_len = 2048
+        self.max_input_len = 1024
         self.max_input_len += 2
         # lengthen model
         self.model = AutoModel.from_pretrained(model_path)
@@ -61,10 +62,17 @@ class MarkdownModel(nn.Module):
 
 #         longformer_model.pooler.dense = self.model.pooler.dense    #print(longformer_model.encoder.layer[i])
         self.model = longformer_model
-        print(self.model)
+        if using_pretrained:
+            model = PretrainingModel(model_path, md_max_len)
+            model = nn.DataParallel(model, device_ids=[i for i in range(num_gpus)])
+            model.to("cuda")
+            checkpoint = torch.load(str(Path.cwd())+"/outputs/model-0.bin")
+            #print(checkpoint.keys())
+            model.load_state_dict(checkpoint)
+            self.model = model.module.model.longformer
         #print(self.model)
+        
         self.top = nn.Linear(769, 1)
-
     def forward(self, ids, mask, fts):
         global_attention_mask = torch.zeros_like(ids)
         #print("ids", ids.size())

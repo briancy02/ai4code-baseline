@@ -42,7 +42,7 @@ class MarkdownDataset(Dataset):
             # Whether or not to encode the sequences with the special tokens relative to their model.
             add_special_tokens=True,
             # Truncate to a maximum length specified with the argument max_length or to the maximum acceptable input length for the model if that argument is not provided. This will truncate token by token, removing a token from the longest sequence in the pair if a pair of sequences (or a batch of pairs) is provided.
-            max_length=39,
+            max_length=32,
             padding="max_length",
             truncation=True
         )
