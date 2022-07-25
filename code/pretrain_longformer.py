@@ -55,11 +55,6 @@ class PretrainingModel(nn.Module):
             longformer_self_attn_for_codebert.value_global = copy.deepcopy(layer.attention.self.value)
             
             longformer_model.encoder.layer[i].attention.self = longformer_self_attn_for_codebert
-#             longformer_model.encoder.layer[i].attention.output.dense = layer.attention.output.dense
-            
-#             longformer_model.encoder.layer[i].intermediate.dense = layer.intermediate.dense
-            
-#             longformer_model.encoder.layer[i].output.dense = layer.output.dense
 
         self.model =  longformer_model_MLM
 

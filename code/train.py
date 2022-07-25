@@ -14,17 +14,18 @@ from metrics import *
 import torch
 import argparse
 from stlr import SlantedTriangular
-data_dir = str(Path.cwd()) + '/data/'
+parser.add_argument('--data_dir', type=str, default="processed_dataset_1/")
 
 parser = argparse.ArgumentParser(description='Process some arguments')
 parser.add_argument('--model_name_or_path', type=str, default='microsoft/codebert-base')
-parser.add_argument('--train_mark_path', type=str, default=data_dir+ 'train_mark_2.csv')
-parser.add_argument('--train_features_path', type=str, default=data_dir+ 'train_fts_2.json')
-parser.add_argument('--val_mark_path', type=str, default=data_dir+ 'val_mark_2.csv')
-parser.add_argument('--val_features_path', type=str, default=data_dir+ 'val_fts_2.json')
-parser.add_argument('--val_path', type=str, default=data_dir+ 'val2.csv')
+parser.add_argument('--train_mark_path', type=str, default='train_mark.csv')
+parser.add_argument('--train_features_path', type=str, default='train_fts.json')
+parser.add_argument('--val_mark_path', type=str, default='val_mark.csv')
+parser.add_argument('--val_features_path', type=str, default='val_fts.json')
+parser.add_argument('--val_path', type=str, default='val.csv')
+parser.add_argument('--orders_data_path', type=str, default='train_orders.csv')
 parser.add_argument('--checkpoint_format', type=str, default="./outputs/codebert_new_data/model-{e}.bin")
-parser.add_argument('--alternative_dataset', type=str, default=False)
+
 
 parser.add_argument('--num_gpus', type=int, default=4)
 parser.add_argument('--md_max_len', type=int, default=64)
@@ -34,34 +35,39 @@ parser.add_argument('--accumulation_steps', type=int, default=4)
 parser.add_argument('--epochs', type=int, default=5)
 parser.add_argument('--n_workers', type=int, default=8)
 
+
 args = parser.parse_args()
+data_dir = str(Path.cwd()) + '/data/' + args.data_dir
+
 #os.mkdir("./outputs")
 
 print("MODEL CONFIGS")
 
-#train_df_mark = pd.read_csv(args.train_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
-train_df_mark = pd.read_csv(args.train_mark_path).dropna().reset_index(drop=True)
-train_fts = json.load(open(args.train_features_path))
+if args.data_dir == "processed_dataset_2/":
+    train_df_mark = pd.read_csv(data_dir+args.train_mark_path +).dropna().reset_index(drop=True)
+    val_df_mark = pd.read_csv(data_dir+args.val_mark_path).dropna().reset_index(drop=True)
+    df_orders = pd.read_csv(
+        data_dir + 'data.csv',
+        index_col='id',
+        squeeze=True,
+    )
+    df_orders = df_orders[df_orders['cell_type']=='markdown'].drop(columns = ['source','cell_type', 'rank', 'pct_rank'])
+else:    
+    train_df_mark = pd.read_csv(data_dir+args.train_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
+    val_df_mark = pd.read_csv(data_dir+args.val_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
+    df_orders = pd.read_csv(
+        data_dir + 'train_orders.csv',
+        index_col='id',
+        squeeze=True,
+    ).str.split() 
+train_fts = json.load(data_dir+open(args.train_features_path))
+val_fts = json.load(data_dir+open(args.val_features_path))
+val_df = pd.read_csv(data_dir+args.val_path)
 
-#val_df_mark = pd.read_csv(args.val_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
-val_df_mark = pd.read_csv(args.val_mark_path).dropna().reset_index(drop=True)
-val_fts = json.load(open(args.val_features_path))
-val_df = pd.read_csv(args.val_path)
 
-order_df = pd.read_csv(data_dir+"train_orders.csv").set_index("id")
 
-# df_orders = pd.read_csv(
-#     data_dir + 'train_orders.csv',
-#     index_col='id',
-#     squeeze=True,
-# ).str.split()
 
-df_orders = pd.read_csv(
-    data_dir + 'data.csv',
-    index_col='id',
-    squeeze=True,
-)
-df_orders = df_orders[df_orders['cell_type']=='markdown'].drop(columns = ['source','cell_type', 'rank', 'pct_rank'])
+
 
 raw_datasets = load_dataset("code_search_net", "python")
 def get_training_corpus():
