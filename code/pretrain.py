@@ -1,9 +1,8 @@
 from torch.utils.data import DataLoader, Dataset
 import torch
 from transformers import AutoTokenizer
-#from easynmt import EasyNMT
 from tqdm import tqdm
-#model = EasyNMT('opus-mt')
+
 class PretrainDataset(Dataset):
     # train mark is taken as input - train mark contains markdown cells
     def __init__(self, df, training_corpus, model_name_or_path, total_max_len, md_max_len, fts):
@@ -17,10 +16,6 @@ class PretrainDataset(Dataset):
 
     def __getitem__(self, index):
         row = self.df.iloc[index]
-        #print("row source", row.source)
-        #print("code", [str(x) for x in self.fts[row.id]["codes"]])
-        #text = model.translate(row.source, target_lang='en')
-
         inputs = self.tokenizer.encode_plus(
             row.source,
             None,
@@ -33,8 +28,6 @@ class PretrainDataset(Dataset):
         )
         n_md = self.fts[row.id]["total_md"]
         n_code = self.fts[row.id]["total_code"]
-        #print(n_md, n_code)
-        #print("one code cell", len(self.fts[row.id]["codes"][0]))
         code_inputs = self.tokenizer.batch_encode_plus(
             [str(x) for x in self.fts[row.id]["codes"]],
             # Whether or not to encode the sequences with the special tokens relative to their model.
@@ -44,10 +37,6 @@ class PretrainDataset(Dataset):
             padding="max_length",
             truncation=True
         )
-        #print(len(code_inputs))
-#         features[idx]["total_code"] = total_code
-#         features[idx]["total_md"] = total_md
-#         features[idx]["codes"] = codes
         
         if n_md + n_code == 0:
             fts = torch.FloatTensor([0])
@@ -56,20 +45,16 @@ class PretrainDataset(Dataset):
         # fts is percentage of md out of all tokens?    
 
         ids = inputs['input_ids']
-        # numerical representations of tokens building the sequences that will be used as input by the model
-        #print("fts", fts)
-        #print("ids", ids)
+        # numerical representations of tokens building the sequences that will be used as input by the model=
         for x in code_inputs['input_ids']:
             #print(x)
             ids.extend(x[:-1])
         
-        #print("ids", ids)
         ids = ids[:self.total_max_len]
         if len(ids) != self.total_max_len:
             ids = ids + [self.tokenizer.pad_token_id, ] * (self.total_max_len - len(ids))
         ids = torch.LongTensor(ids)
         
-        # https://huggingface.co/docs/transformers/glossary#attention-mask
         mask = inputs['attention_mask']
         for x in code_inputs['attention_mask']:
             mask.extend(x[:-1])
@@ -81,14 +66,9 @@ class PretrainDataset(Dataset):
         assert len(ids) == self.total_max_len
 
         ##### MASKING FOR PRETRAINING
-        #ids, mask, fts, torch.FloatTensor([row.pct_rank])
         labels = ids.clone()
         # We sample a few tokens in each sequence for MLM training (with probability `self.mlm_probability` 0.15)
         probability_matrix = torch.full(labels.shape, 0.15)
-#         special_tokens_mask = [
-#                 self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=False) for val in labels.tolist()
-#         ]
-#         special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
 
         #probability_matrix.masked_fill_(mask, value=0.0)
         masked_indices = torch.bernoulli(probability_matrix).bool()
@@ -272,7 +252,7 @@ def train(model, train_loader, val_loader, epochs):
         #print("Preds score", y_val - y_pred)
         torch.save(model.state_dict(), checkpoint_format.format(e=e))
 
-    return model, y_pred
+    return model
 
 from transformers import RobertaForMaskedLM
 
@@ -282,4 +262,4 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.device_count() > 1:
     model = nn.DataParallel(model, device_ids=[i for i in range(num_gpus)])
 model = model.to(torch.device("cuda"))
-model, y_pred = train(model, train_loader, val_loader, epochs=epochs)    
+model = train(model, train_loader, val_loader, epochs=epochs)    

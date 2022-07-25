@@ -32,7 +32,7 @@ class MarkdownModel(nn.Module):
         return x
 
 class LongformerModel(nn.Module):
-    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus=4):
+    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus):
         super(LongformerModel, self).__init__()
         self.attention_window = 512
         self.md_max_len = md_max_len
@@ -41,11 +41,9 @@ class LongformerModel(nn.Module):
         # lengthen model
         self.model = AutoModel.from_pretrained(model_path)
         config = LongformerConfig(vocab_size = self.model.config.vocab_size, max_position_embeddings = self.model.config.max_position_embeddings)
-        #config.attention_mode = 'sliding_chunks'
         longformer_model = LongformerModel(config=config)
         print(config)
         current_max_input_len, embed_size = self.model.embeddings.position_embeddings.weight.shape
-#         print(current_max_input_len, embed_size)
         new_encoder_pos_embed = self.model.embeddings.position_embeddings.weight.new_empty(self.max_input_len, embed_size)
         print("new embed size", new_encoder_pos_embed.size())
         k = 2
@@ -59,10 +57,6 @@ class LongformerModel(nn.Module):
         longformer_model.config.vocab_size = self.model.config.vocab_size
         longformer_model.config.layer_norm_eps = self.model.config.layer_norm_eps
         longformer_model.config.attention_window = [self.attention_window] * self.model.config.num_hidden_layers
-        longformer_model.config.attention_window[:4] = [32,32,64,64]
-        longformer_model.config.attention_window[4:6] = [128, 128]
-        longformer_model.config.attention_window[6:8] = [256,256]
-        longformer_model.config.attention_window[8:10] = [512, 512]
         for i, layer in enumerate(self.model.encoder.layer):
             longformer_self_attn_for_codebert = LongformerSelfAttention(longformer_model.config, layer_id=i)
             longformer_self_attn_for_codebert.query = layer.attention.self.query
@@ -80,21 +74,15 @@ class LongformerModel(nn.Module):
             model = nn.DataParallel(model, device_ids=[i for i in range(num_gpus)])
             model.to("cuda")
             checkpoint = torch.load(str(Path.cwd())+"/outputs/model-0.bin")
-            #print(checkpoint.keys())
             model.load_state_dict(checkpoint)
             self.model = model.module.model.longformer
         
         self.top = nn.Linear(769, 1)
     def forward(self, ids, mask, fts):
         global_attention_mask = torch.zeros_like(ids)
-        #print("ids", ids.size())
         global_attention_mask[:, :64] = 1
         x = self.model(input_ids=ids, attention_mask=mask, global_attention_mask=None)[0]
-        #print("fts", fts)
-        #print("x size", x.size())
-        #print("values", torch.mean(x[:, 0:64, :]), fts)
         x = torch.cat((x[:, 0, :], fts), 1)
-        #print("/n", x.size())
         x = self.top(x)
         return x
         

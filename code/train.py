@@ -85,11 +85,6 @@ def collate_fn_padd(batch):
     masks = torch.nn.utils.rnn.pad_sequence([ t[1] for t in batch], batch_first=True)
     fts = torch.nn.utils.rnn.pad_sequence([ t[2] for t in batch], batch_first=True)
     ranks = torch.nn.utils.rnn.pad_sequence([ t[3] for t in batch], batch_first=True)
-    #print(torch.swapaxes(inputs, 0, 1).size())
-    #print(inputs.size())
-    #print(inputs.max())
-    #inputs = torch.empty(batch_size, total_max_len)
-    #masks = torch.empty(batch_size, total_max_len)
     
     return inputs, masks, fts, ranks
 
