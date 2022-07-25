@@ -64,21 +64,7 @@ train_fts = json.load(data_dir+open(args.train_features_path))
 val_fts = json.load(data_dir+open(args.val_features_path))
 val_df = pd.read_csv(data_dir+args.val_path)
 
-
-
-
-
-
-raw_datasets = load_dataset("code_search_net", "python")
-def get_training_corpus():
-    return (
-        raw_datasets["train"][i : i + 1000]["whole_func_string"]
-        for i in range(0, len(raw_datasets["train"]), 1000)
-    )
-
-# takes in df 
-training_corpus = get_training_corpus()
-train_ds = MarkdownDataset(train_df_mark, training_corpus, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
+train_ds = MarkdownDataset(train_df_mark, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
                            total_max_len=args.total_max_len, fts=train_fts)
 def collate_fn_padd(batch):
     '''

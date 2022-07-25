@@ -7,15 +7,13 @@ import pandas as pd
 #model = EasyNMT('opus-mt')
 class MarkdownDataset(Dataset):
     # train mark is taken as input - train mark contains markdown cells
-    def __init__(self, df, training_corpus, model_name_or_path, total_max_len, md_max_len, fts):
+    def __init__(self, df, model_name_or_path, total_max_len, md_max_len, fts):
         super().__init__()
         self.df = df.reset_index(drop=True)
         self.df['id'] = df['id'].astype("str")
         self.md_max_len = md_max_len
         self.total_max_len = total_max_len  # maxlen allowed by model config
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-        #old_tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-        #self.tokenizer = old_tokenizer.train_new_from_iterator(training_corpus, 50265)
         self.fts = fts
         
 

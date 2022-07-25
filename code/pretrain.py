@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 class PretrainDataset(Dataset):
     # train mark is taken as input - train mark contains markdown cells
-    def __init__(self, df, training_corpus, model_name_or_path, total_max_len, md_max_len, fts):
+    def __init__(self, df, model_name_or_path, total_max_len, md_max_len, fts):
         super().__init__()
         self.df = df.reset_index(drop=True)
         self.md_max_len = md_max_len
@@ -140,15 +140,7 @@ df_orders = pd.read_csv(
 ).str.split()
 
 raw_datasets = load_dataset("code_search_net", "python")
-def get_training_corpus():
-    return (
-        raw_datasets["train"][i : i + 1000]["whole_func_string"]
-        for i in range(0, len(raw_datasets["train"]), 1000)
-    )
-
-# takes in df 
-training_corpus = get_training_corpus()
-train_ds = PretrainDataset(train_df_mark, training_corpus, model_name_or_path=model_name_or_path, md_max_len=md_max_len,
+train_ds = PretrainDataset(train_df_mark, model_name_or_path=model_name_or_path, md_max_len=md_max_len,
                            total_max_len=total_max_len, fts=train_fts)
 def collate_fn_padd(batch):
     '''
@@ -162,7 +154,7 @@ def collate_fn_padd(batch):
     labels = torch.nn.utils.rnn.pad_sequence([ t[2] for t in batch], batch_first=True)
     return inputs, mask, labels
 
-val_ds = PretrainDataset(val_df_mark, training_corpus, model_name_or_path=model_name_or_path, md_max_len=md_max_len,
+val_ds = PretrainDataset(val_df_mark, model_name_or_path=model_name_or_path, md_max_len=md_max_len,
                          total_max_len=total_max_len, fts=val_fts)
 train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=n_workers,
                           pin_memory=False, drop_last=True, collate_fn = collate_fn_padd)
