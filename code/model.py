@@ -4,13 +4,36 @@ import torch
 import copy
 from transformers import AutoModel, AutoTokenizer, AdamW, get_linear_schedule_with_warmup
 from transformers.models.longformer.modeling_longformer import LongformerSelfAttention
-from transformers import LongformerModel, LongformerTokenizer, LongformerConfig, LongformerForMaskedLM
+from transformers import LongformerModel, LongformerTokenizer, LongformerConfig, LongformerForMaskedLM, RobertaForMaskedLM
 from pathlib import Path
-from pretrain_model import PretrainingModel
+from pretrain_longformer import PretrainingModel
 
 class MarkdownModel(nn.Module):
-    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus=4):
+    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus):
         super(MarkdownModel, self).__init__()
+        self.attention_window = 512
+        self.md_max_len = md_max_len
+        self.max_input_len = 512
+        self.model = AutoModel.from_pretrained(model_path)
+        if using_pretrained:
+            model = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm")
+            model = nn.DataParallel(model, device_ids=[i for i in range(num_gpus)])
+            model.to("cuda")
+            checkpoint = torch.load(str(Path.cwd())+"/outputs/model-0.bin")
+            #print(checkpoint.keys())
+            model.load_state_dict(checkpoint)
+            self.model = model.module.roberta
+        self.top = nn.Linear(769, 1)
+        
+    def forward(self, ids, mask, fts):
+        x = self.model(input_ids=ids, attention_mask=mask)[0]
+        x = torch.cat((x[:, 0, :], fts), 1)
+        x = self.top(x)
+        return x
+
+class LongformerModel(nn.Module):
+    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus=4):
+        super(LongformerModel, self).__init__()
         self.attention_window = 512
         self.md_max_len = md_max_len
         self.max_input_len = 1024
@@ -40,9 +63,6 @@ class MarkdownModel(nn.Module):
         longformer_model.config.attention_window[4:6] = [128, 128]
         longformer_model.config.attention_window[6:8] = [256,256]
         longformer_model.config.attention_window[8:10] = [512, 512]
-        #print(self.model.config.num_hidden_layers)
-        #print(self.model.config.attention_window)
-        
         for i, layer in enumerate(self.model.encoder.layer):
             longformer_self_attn_for_codebert = LongformerSelfAttention(longformer_model.config, layer_id=i)
             longformer_self_attn_for_codebert.query = layer.attention.self.query
@@ -54,13 +74,6 @@ class MarkdownModel(nn.Module):
             longformer_self_attn_for_codebert.value_global = copy.deepcopy(layer.attention.self.value)
             
             longformer_model.encoder.layer[i].attention.self = longformer_self_attn_for_codebert
-#             longformer_model.encoder.layer[i].attention.output.dense = layer.attention.output.dense
-            
-#             longformer_model.encoder.layer[i].intermediate.dense = layer.intermediate.dense
-            
-#             longformer_model.encoder.layer[i].output.dense = layer.output.dense
-
-#         longformer_model.pooler.dense = self.model.pooler.dense    #print(longformer_model.encoder.layer[i])
         self.model = longformer_model
         if using_pretrained:
             model = PretrainingModel(model_path, md_max_len)
@@ -70,7 +83,6 @@ class MarkdownModel(nn.Module):
             #print(checkpoint.keys())
             model.load_state_dict(checkpoint)
             self.model = model.module.model.longformer
-        #print(self.model)
         
         self.top = nn.Linear(769, 1)
     def forward(self, ids, mask, fts):

@@ -18,12 +18,13 @@ data_dir = str(Path.cwd()) + '/data/'
 
 parser = argparse.ArgumentParser(description='Process some arguments')
 parser.add_argument('--model_name_or_path', type=str, default='microsoft/codebert-base')
-parser.add_argument('--train_mark_path', type=str, default=data_dir+ 'train_mark.csv')
-parser.add_argument('--train_features_path', type=str, default=data_dir+ 'train_fts.json')
-parser.add_argument('--val_mark_path', type=str, default=data_dir+ 'val_mark.csv')
-parser.add_argument('--val_features_path', type=str, default=data_dir+ 'val_fts.json')
-parser.add_argument('--val_path', type=str, default=data_dir+ 'val.csv')
-parser.add_argument('--checkpoint_format', type=str, default="./outputs/model-{e}.bin")
+parser.add_argument('--train_mark_path', type=str, default=data_dir+ 'train_mark_2.csv')
+parser.add_argument('--train_features_path', type=str, default=data_dir+ 'train_fts_2.json')
+parser.add_argument('--val_mark_path', type=str, default=data_dir+ 'val_mark_2.csv')
+parser.add_argument('--val_features_path', type=str, default=data_dir+ 'val_fts_2.json')
+parser.add_argument('--val_path', type=str, default=data_dir+ 'val2.csv')
+parser.add_argument('--checkpoint_format', type=str, default="./outputs/codebert_new_data/model-{e}.bin")
+parser.add_argument('--alternative_dataset', type=str, default=False)
 
 parser.add_argument('--num_gpus', type=int, default=4)
 parser.add_argument('--md_max_len', type=int, default=64)
@@ -38,18 +39,29 @@ args = parser.parse_args()
 
 print("MODEL CONFIGS")
 
-train_df_mark = pd.read_csv(args.train_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
+#train_df_mark = pd.read_csv(args.train_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
+train_df_mark = pd.read_csv(args.train_mark_path).dropna().reset_index(drop=True)
 train_fts = json.load(open(args.train_features_path))
-val_df_mark = pd.read_csv(args.val_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
+
+#val_df_mark = pd.read_csv(args.val_mark_path).drop("parent_id", axis=1).dropna().reset_index(drop=True)
+val_df_mark = pd.read_csv(args.val_mark_path).dropna().reset_index(drop=True)
 val_fts = json.load(open(args.val_features_path))
 val_df = pd.read_csv(args.val_path)
 
 order_df = pd.read_csv(data_dir+"train_orders.csv").set_index("id")
+
+# df_orders = pd.read_csv(
+#     data_dir + 'train_orders.csv',
+#     index_col='id',
+#     squeeze=True,
+# ).str.split()
+
 df_orders = pd.read_csv(
-    data_dir + 'train_orders.csv',
+    data_dir + 'data.csv',
     index_col='id',
     squeeze=True,
-).str.split()
+)
+df_orders = df_orders[df_orders['cell_type']=='markdown'].drop(columns = ['source','cell_type', 'rank', 'pct_rank'])
 
 raw_datasets = load_dataset("code_search_net", "python")
 def get_training_corpus():
@@ -88,6 +100,7 @@ train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, nu
 val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.n_workers,
                         pin_memory=False, drop_last=False,collate_fn = collate_fn_padd)
 
+    
 
 def read_data(data):
     # seperation of training data and label
@@ -139,7 +152,7 @@ def train(model, train_loader, val_loader, epochs):
     
     resume_from_epoch = 0
     for try_epoch in range(epochs, 0, -1):
-        if os.path.exists('./outputs/model-{epoch}.bin'.format(epoch=try_epoch)):
+        if os.path.exists('./outputs/codebert_new_data/model-{epoch}.bin'.format(epoch=try_epoch)):
             resume_from_epoch = try_epoch+1
             break
     if resume_from_epoch:
@@ -181,13 +194,15 @@ def train(model, train_loader, val_loader, epochs):
         val_df["pred"] = val_df.groupby(["id", "cell_type"])["rank"].rank(pct=True)
         val_df.loc[val_df["cell_type"] == "markdown", "pred"] = y_pred
         y_dummy = val_df.sort_values("pred").groupby('id')['cell_id'].apply(list)
-        print("Preds score", kendall_tau(df_orders.loc[y_dummy.index], y_dummy))
+        #print("Preds score", kendall_tau(df_orders.loc[y_dummy.index], y_dummy))
         torch.save(model.state_dict(), args.checkpoint_format.format(e=e))
+        print("Preds score", kendall_tau(df_orders[df_orders.id==y_dummy.index], y_dummy))
+        
 
     return model, y_pred
 
 
-model = MarkdownModel(args.model_name_or_path, args.md_max_len, using_pretrained=False, num_gpus=args.num_gpus)
+model = MarkdownModel(args.model_name_or_path, args.md_max_len, using_pretrained=True, num_gpus=args.num_gpus)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.device_count() > 1:
