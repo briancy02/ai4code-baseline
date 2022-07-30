@@ -9,17 +9,17 @@ from pathlib import Path
 from pretrain_longformer import PretrainingModel
 
 class MarkdownModel(nn.Module):
-    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus):
+    def __init__(self, model_path, md_max_len, num_gpus, pretrained_model_path=None):
         super(MarkdownModel, self).__init__()
         self.attention_window = 512
         self.md_max_len = md_max_len
         self.max_input_len = 512
         self.model = AutoModel.from_pretrained(model_path)
-        if using_pretrained:
+        if pretrained_model_path:
             model = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm")
             model = nn.DataParallel(model, device_ids=[i for i in range(num_gpus)])
             model.to("cuda")
-            checkpoint = torch.load(str(Path.cwd())+"/outputs/model-0.bin")
+            checkpoint = torch.load(str(Path.cwd())+pretrained_model_path)
             #print(checkpoint.keys())
             model.load_state_dict(checkpoint)
             self.model = model.module.roberta
@@ -32,7 +32,7 @@ class MarkdownModel(nn.Module):
         return x
 
 class LongformerModel(nn.Module):
-    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus):
+    def __init__(self, model_path, md_max_len, num_gpus, using_pretrained):
         super(LongformerModel, self).__init__()
         self.attention_window = 512
         self.md_max_len = md_max_len
