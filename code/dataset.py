@@ -15,6 +15,7 @@ class MarkdownDataset(Dataset):
         self.total_max_len = total_max_len  # maxlen allowed by model config
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.fts = fts
+        self.code_len = total_max_len - md_max_len
         
 
     def __getitem__(self, index):
@@ -35,18 +36,16 @@ class MarkdownDataset(Dataset):
         #print(n_md, n_code)
         items = [str(x) for x in self.fts[row.id]["codes"]]
         code_inputs=None
-        try:
-            code_inputs = self.tokenizer.batch_encode_plus(
-                items,
+        
+        code_inputs = self.tokenizer.batch_encode_plus(
+            items,
             # Whether or not to encode the sequences with the special tokens relative to their model.
-                add_special_tokens=True,
-                # Truncate to a maximum length specified with the argument max_length or to the maximum acceptable input length for the model if that argument is not provided. This will truncate token by token, removing a token from the longest sequence in the pair if a pair of sequences (or a batch of pairs) is provided.
-                max_length=23,
-                padding="max_length",
-                truncation=True
-            )
-        except Exception as e:
-            print(e, row.id)
+            add_special_tokens=True,
+            # Truncate to a maximum length specified with the argument max_length or to the maximum acceptable input length for the model if that argument is not provided. This will truncate token by token, removing a token from the longest sequence in the pair if a pair of sequences (or a batch of pairs) is provided.
+            max_length=self.code_len // len(items) + 1,
+            padding="max_length",
+            truncation=True
+        )
         if n_md + n_code == 0:
             fts = torch.FloatTensor([0])
         else:
@@ -69,7 +68,7 @@ class MarkdownDataset(Dataset):
             mask = mask + [self.tokenizer.pad_token_id, ] * (self.total_max_len - len(mask))
         mask = torch.LongTensor(mask)
 
-        assert len(ids) == self.total_max_len
+        #assert len(ids) == self.total_max_len
 
         return ids, mask, fts, torch.FloatTensor([row.pct_rank])
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from pretrain_longformer import PretrainingModel
 
 class MarkdownModel(nn.Module):
-    def __init__(self, model_path, md_max_len, num_gpus, pretrained_model_path=None):
+    def __init__(self, model_path, md_max_len, num_gpus, pretrained_model_path):
         super(MarkdownModel, self).__init__()
         self.attention_window = 512
         self.md_max_len = md_max_len
@@ -19,20 +19,23 @@ class MarkdownModel(nn.Module):
             model = RobertaForMaskedLM.from_pretrained("microsoft/codebert-base-mlm")
             model = nn.DataParallel(model, device_ids=[i for i in range(num_gpus)])
             model.to("cuda")
-            checkpoint = torch.load(str(Path.cwd())+pretrained_model_path)
-            #print(checkpoint.keys())
+            checkpoint = torch.load(pretrained_model_path)
             model.load_state_dict(checkpoint)
             self.model = model.module.roberta
+        self.dense = nn.Linear(769, 769)
+        self.dropout = nn.Dropout(0.1)
         self.top = nn.Linear(769, 1)
         
     def forward(self, ids, mask, fts):
         x = self.model(input_ids=ids, attention_mask=mask)[0]
         x = torch.cat((x[:, 0, :], fts), 1)
+        x = self.dense(x)
+        x = self.dropout(x)
         x = self.top(x)
         return x
 
 class LongformerModel(nn.Module):
-    def __init__(self, model_path, md_max_len, num_gpus, using_pretrained):
+    def __init__(self, model_path, md_max_len, using_pretrained, num_gpus):
         super(LongformerModel, self).__init__()
         self.attention_window = 512
         self.md_max_len = md_max_len

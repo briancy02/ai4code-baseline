@@ -16,17 +16,17 @@ import argparse
 from stlr import SlantedTriangular
 
 parser = argparse.ArgumentParser(description='Process some arguments')
-parser.add_argument('--data_dir', type=str, default="processed_dataset_2/")
+parser.add_argument('--data_dir', type=str, default="processed_dataset_1/")
 
-parser.add_argument('--model_name_or_path', type=str, default='microsoft/codebert-base')
+parser.add_argument('--model_name_or_path', type=str, default='microsoft/graphcodebert-base')
 parser.add_argument('--train_mark_path', type=str, default='train_mark.csv')
 parser.add_argument('--train_features_path', type=str, default='train_fts.json')
 parser.add_argument('--val_mark_path', type=str, default='val_mark.csv')
 parser.add_argument('--val_features_path', type=str, default='val_fts.json')
 parser.add_argument('--val_path', type=str, default='val.csv')
 parser.add_argument('--orders_data_path', type=str, default='train_orders.csv')
-parser.add_argument('--checkpoint_format', type=str, default="./outputs/codebert_second_data/model-{e}.bin")
-parser.add_argument('--pretrained_model_path', type=str, default="/outputs/model-0.bin")
+parser.add_argument('--checkpoint_format', type=str, default="./outputs/preprocess/model-{e}.bin")
+parser.add_argument('--pretrained_model_path', type=str, default="./outputs/model-0.bin")
 
 parser.add_argument('--num_gpus', type=int, default=4)
 parser.add_argument('--md_max_len', type=int, default=64)
@@ -36,9 +36,13 @@ parser.add_argument('--accumulation_steps', type=int, default=4)
 parser.add_argument('--epochs', type=int, default=5)
 parser.add_argument('--n_workers', type=int, default=8)
 
+START="This is the beginning of the notebook"
+END= "This is the end of the notebook"
 
 args = parser.parse_args()
 data_dir = str(Path.cwd()) + '/data/' + args.data_dir
+
+#os.mkdir("./outputs")
 
 print("MODEL CONFIGS")
 
@@ -65,6 +69,8 @@ val_df = pd.read_csv(data_dir+args.val_path)
 
 train_ds = MarkdownDataset(train_df_mark, model_name_or_path=args.model_name_or_path, md_max_len=args.md_max_len,
                            total_max_len=args.total_max_len, fts=train_fts)
+
+
 def collate_fn_padd(batch):
     '''
     Padds batch of variable length
@@ -138,14 +144,14 @@ def train(model, train_loader, val_loader, epochs):
     
     resume_from_epoch = 0
     for try_epoch in range(epochs, 0, -1):
-        if os.path.exists('./outputs/codebert_second_data/model-{epoch}.bin'.format(epoch=try_epoch)):
+        if os.path.exists('./outputs/preprocess/model-{epoch}.bin'.format(epoch=try_epoch)):
             resume_from_epoch = try_epoch+1
             break
     if resume_from_epoch:
         filepath = args.checkpoint_format.format(e=resume_from_epoch)
         checkpoint = torch.load(args.checkpoint_format.format(e=try_epoch))
         model.load_state_dict(checkpoint)
-    y_pred = None    
+        
     for e in range(resume_from_epoch, epochs):
         model.train()
         tbar = tqdm(train_loader, file=sys.stdout)
@@ -175,19 +181,20 @@ def train(model, train_loader, val_loader, epochs):
             tbar.set_description(f"Epoch {e + 1} Loss: {avg_loss} lr: {optimizer.param_groups[0]['lr']}")
         
         # objective is to learn the percentage ranking
-        y_val, y_pred = validate(model, val_loader)
-        # display rankings in percentage
-        torch.save(model.state_dict(), args.checkpoint_format.format(e=e))
-        val_df["pred"] = val_df.groupby(["id", "cell_type"])["rank"].rank(pct=True)
-        val_df.loc[val_df["cell_type"] == "markdown", "pred"] = y_pred
-        #y_dummy = val_df.sort_values("pred").groupby('id')['cell_id'].apply(list)
-        y_dummy = val_df.sort_values("pred").groupby('id')['Unnamed: 0'].apply(list)
-        new_df = df_orders.groupby(['id']).agg(tuple).applymap(list).reset_index().set_index('id')
-        print("df_orders", df_orders.loc[y_dummy.index])
-        print(y_dummy)
-        print("Preds score", kendall_tau(new_df.loc[y_dummy.index]['Unnamed: 0'], y_dummy))
         
-        #print("Preds score", kendall_tau(df_orders.loc[y_dummy.index], y_dummy))
+        y_val, y_pred = validate(model, val_loader)
+        torch.save(model.state_dict(), args.checkpoint_format.format(e=e))
+        # display rankings in percentage
+        try:
+            val_df["pred"] = val_df.groupby(["id", "cell_type"])["rank"].rank(pct=True)
+            print(y_pred.size())
+            print(val_df["pred"])
+            val_df.loc[val_df["cell_type"] == "markdown", "pred"] = y_pred
+            y_dummy = val_df.sort_values("pred").groupby('id')['cell_id'].apply(list)
+            print("Preds score", kendall_tau(df_orders.loc[y_dummy.index], y_dummy))
+        except:
+            print("exception")
+#         print("Preds score", kendall_tau(df_orders[df_orders.id==y_dummy.index], y_dummy))
         
 
     return model, y_pred
@@ -200,3 +207,6 @@ if torch.cuda.device_count() > 1:
     model = nn.DataParallel(model, device_ids=[i for i in range(args.num_gpus)])
 model = model.to(device)
 model, y_pred = train(model, train_loader, val_loader, epochs=args.epochs)
+
+
+
